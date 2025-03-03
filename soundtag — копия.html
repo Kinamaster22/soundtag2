@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Красная кнопка</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #000;
+            overflow: hidden;
+        }
+        
+        .big-red-button {
+            width: 90vw;
+            height: 90vh;
+            max-width: 800px;
+            max-height: 800px;
+            border-radius: 50%;
+            background-color: #ff0000;
+            border: none;
+            box-shadow: 0 0 50px rgba(255, 0, 0, 0.5);
+            cursor: pointer;
+            outline: none;
+            position: relative;
+            transition: transform 0.1s;
+        }
+        
+        .big-red-button:hover {
+            background-color: #e00000;
+        }
+        
+        .big-red-button:active {
+            transform: scale(0.98);
+        }
+        
+        /* Скрываем аудио элемент */
+        audio {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <button id="soundButton" class="big-red-button"></button>
+    <audio id="customSound" loop preload="auto">
+        <source src="https://od.lk/d/NTJfNDc5NzUwMTRf/mix_3m24s-_audio-joiner.com_.wav" type="audio/wav">
+    </audio>
+    
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const soundButton = document.getElementById('soundButton');
+            const customSound = document.getElementById('customSound');
+            let isPlaying = false;
+            
+            // Предзагружаем звук при загрузке страницы
+            customSound.load();
+            
+            // Создаем контекст аудио раньше для быстрого запуска
+            let audioContext;
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                // Создаем тихий звук для инициализации аудиоконтекста
+                const silentBuffer = audioContext.createBuffer(1, 1, 22050);
+                const source = audioContext.createBufferSource();
+                source.buffer = silentBuffer;
+                source.connect(audioContext.destination);
+                source.start();
+            } catch (e) {
+                console.log('AudioContext не поддерживается');
+            }
+            
+            // Обработчик нажатия на красную кнопку
+            soundButton.addEventListener('click', function() {
+                if (!isPlaying) {
+                    // Попытка разбудить AudioContext если он был приостановлен
+                    if (audioContext && audioContext.state === 'suspended') {
+                        audioContext.resume();
+                    }
+                    
+                    // Воспроизводим звук
+                    customSound.currentTime = 0; // Сбрасываем позицию звука на начало
+                    const playPromise = customSound.play();
+                    
+                    if (playPromise !== undefined) {
+                        playPromise.then(() => {
+                            console.log('Звук воспроизводится');
+                            isPlaying = true;
+                            
+                            // Делаем кнопку неактивной после первого нажатия
+                            soundButton.style.opacity = '0.8';
+                            soundButton.style.cursor = 'default';
+                            
+                            // Пытаемся удерживать экран активным
+                            try {
+                                navigator.wakeLock && navigator.wakeLock.request('screen');
+                            } catch (err) {
+                                console.log('WakeLock не поддерживается');
+                            }
+                        }).catch(error => {
+                            console.error('Не удалось воспроизвести звук:', error);
+                            
+                            // Если автоматическое воспроизведение заблокировано, пытаемся снова с взаимодействием пользователя
+                            const handleUserInteraction = function() {
+                                customSound.play().then(() => {
+                                    isPlaying = true;
+                                    document.removeEventListener('click', handleUserInteraction);
+                                    soundButton.style.opacity = '0.8';
+                                    soundButton.style.cursor = 'default';
+                                });
+                            };
+                            document.addEventListener('click', handleUserInteraction);
+                        });
+                    }
+                }
+            });
+            
+            // Пытаемся предотвратить закрытие страницы
+            window.addEventListener('beforeunload', function(e) {
+                if (isPlaying) {
+                    e.preventDefault();
+                    e.returnValue = '';
+                    return '';
+                }
+            });
+            
+            // Попытка возобновить звук при возврате на вкладку
+            document.addEventListener('visibilitychange', function() {
+                if (document.visibilityState === 'visible' && isPlaying && customSound.paused) {
+                    customSound.play();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
